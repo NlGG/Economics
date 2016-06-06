@@ -1,7 +1,2 @@
-# 第6章 内生性の検定と連立方程式
-
-[1 プロビット・モデル、トービット・モデルにおける外生性の検定と推計](1.ipynb)  
-[2 OLSとトービット・モデル、OLSとプロビット・モデルの連立方程式](2.ipynb)  
-[3 連立トービット・モデル](3.ipynb)  
-[4 トービット・モデルとプロビット・モデルの連立方程式](4.ipynb)  
-[5 連立プロビット・モデル](5.ipynb)  
+# 動的計画法勉強会
+6/6 [ベルマンフォード法による最短経路導出](http://nbviewer.jupyter.org/github/NlGG/quant_econ_ex/blob/master/Shortest_Paths_py.ipynb)
