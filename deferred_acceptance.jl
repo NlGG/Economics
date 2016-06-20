@@ -1,4 +1,4 @@
-function deferred_acceptance(apply_prefs::Array, accept_prefs::Array) 
+function deferred_acceptance(apply_prefs::Array{Int64, 2}, accept_prefs::Array{Int64, 2}) 
     da = zeros(Int64, length(accept_prefs[1,:]))
     rem = [i for i in 1:length(apply_prefs[1,:])]
     depth = ones(Int64, length(accept_prefs[:,1])-1)
