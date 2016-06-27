@@ -8,7 +8,7 @@ Author: Daisuke Oyama
 # random_prefs
 
 """
-    random_prefs([rng, ]m, n, allow_unmatched=true)
+    random_prefs([rng, ]m, n[, ReturnCaps]; allow_unmatched=true)
 
 Generate random preference order lists for two groups, say, m males and n
 females.
@@ -17,22 +17,29 @@ Each male has a preference order over femals [1, ..., n] and "unmatched" which
 is represented by 0, while each female has a preference order over males
 [1, ..., m] and "unmatched" which is again represented by 0.
 
+The argument `ReturnCaps` should be supplied in the context of college
+admissions, in which case "males" and "females" should be read as "students"
+and "colleges", respectively, where each college has its capacity.
+
 The optional `rng` argument specifies a random number generator.
 
 # Arguments
 
-- `m::Integer` : Number of males.
-- `n::Integer` : Number of females.
-- `allow_unmatched::Bool(true)` : If false, return preference order lists of
-males and females where 0 is always placed in the last place, (i.e.,
-"unmatched" is least preferred by every individual).
+* `m::Integer` : Number of males.
+* `n::Integer` : Number of females.
+* `::Type{ReturnCaps}` : If supplied, `caps` is also returned.
+* `;allow_unmatched::Bool(true)` : If false, return preference order lists of
+  males and females where 0 is always placed in the last place, (i.e.,
+  "unmatched" is least preferred by every individual).
 
 # Returns
 
-- `m_prefs::Matrix{Int}` :  Array of shape (n+1, m), where each column contains
-a random permutation of 0, 1, ..., n.
-- `f_prefs::Matrix{Int}` :  Array of shape (m+1, n), where each column contains
-a random permutation of 0, 1, ..., m.
+* `m_prefs::Matrix{Int}` :  Array of shape (n+1, m), where each column contains
+  a random permutation of 0, 1, ..., n.
+* `f_prefs::Matrix{Int}` :  Array of shape (m+1, n), where each column contains
+  a random permutation of 0, 1, ..., m.
+* `caps::Vector{Int}` : Vector of length n containing each female's (or
+  college's) capacity. Returned only when `ReturnCaps` is supplied.
 
 # Examples
 
@@ -70,10 +77,34 @@ julia> f_prefs
  4  1  1
  3  4  2
  0  0  0
+
+julia> s_prefs, c_prefs, caps = random_prefs(4, 3, ReturnCaps);
+
+julia> s_prefs
+4x4 Array{Int64,2}:
+ 2  1  2  1
+ 1  3  1  0
+ 3  2  3  3
+ 0  0  0  2
+
+julia> c_prefs
+5x3 Array{Int64,2}:
+ 3  4  1
+ 0  1  4
+ 4  3  0
+ 1  2  3
+ 2  0  2
+
+julia> caps
+3-element Array{Int64,1}:
+ 1
+ 2
+ 2
 ```
 """
 function random_prefs(rng::AbstractRNG,
-	                  m::Integer, n::Integer; allow_unmatched::Bool=true)
+                      m::Integer, n::Integer;
+                      allow_unmatched::Bool=true)
     m_prefs = _random_prefs(rng, m, n, allow_unmatched)
     f_prefs = _random_prefs(rng, n, m, allow_unmatched)
     return m_prefs, f_prefs
@@ -82,25 +113,81 @@ end
 random_prefs(m::Integer, n::Integer; allow_unmatched::Bool=true) =
     random_prefs(Base.GLOBAL_RNG, m, n, allow_unmatched=allow_unmatched)
 
+immutable ReturnCaps end
 
-function _random_prefs(r::AbstractRNG,
-	                   m::Integer, n::Integer, allow_unmatched::Bool)
+function random_prefs(rng::AbstractRNG,
+                      m::Integer, n::Integer, ::Type{ReturnCaps};
+                      allow_unmatched::Bool=true)
+    s_prefs = _random_prefs(rng, m, n, allow_unmatched)
+    c_prefs = _random_prefs(rng, n, m)
+
+    if allow_unmatched
+        unmatched_rankings = Array(Int, n) #rand(r, 2:n+1, m)
+        _random_unmatched!(rng, c_prefs, unmatched_rankings)
+        caps = _random_caps(rng, unmatched_rankings)
+    else
+        caps = _random_caps(rng, m, n)
+    end
+    return s_prefs, c_prefs, caps
+end
+
+random_prefs(m::Integer, n::Integer, T::Type{ReturnCaps};
+             allow_unmatched::Bool=true) =
+    random_prefs(Base.GLOBAL_RNG, m, n, T, allow_unmatched=allow_unmatched)
+
+
+function _random_prefs(rng::AbstractRNG, m::Integer, n::Integer)
     prefs = Array(Int, n+1, m)
     for j in 1:m
         prefs[end, j] = 0
     end
 
-    _randperm2d!(r, sub(prefs, 1:n, :))
+    _randperm2d!(rng, sub(prefs, 1:n, :))
+
+    return prefs
+end
+
+function _random_unmatched!(rng::AbstractRNG, prefs::Matrix{Int},
+                            unmatched_rankings::Vector{Int})
+    n = size(prefs, 1) - 1
+    m = size(prefs, 2)
+    rand!(rng, unmatched_rankings, 2:n+1)
+    for j in 1:m
+        prefs[end, j] = prefs[unmatched_rankings[j], j]
+        prefs[unmatched_rankings[j], j] = 0
+    end
+end
+
+function _random_prefs(rng::AbstractRNG, m::Integer, n::Integer,
+                       allow_unmatched::Bool)
+    prefs = _random_prefs(rng, m, n)
 
     if allow_unmatched
-        unmatched_rankings = rand(r, 2:n+1, m)
-        for j in 1:m
-            prefs[end, j] = prefs[unmatched_rankings[j], j]
-            prefs[unmatched_rankings[j], j] = 0
-        end
+        unmatched_rankings = Array(Int, m)
+        _random_unmatched!(rng, prefs, unmatched_rankings)
     end
 
     return prefs
+end
+
+
+function _random_caps(rng::AbstractRNG, unmatched_rankings::Vector{Int})
+    n = length(unmatched_rankings)
+    u = rand(rng, n)
+    for i in 1:n
+        u[i] *= unmatched_rankings[i]
+        u[i] += 1
+    end
+    return floor(Int, u)
+end
+
+function _random_caps(rng::AbstractRNG, m::Int, n::Int)
+    u = rand(rng, n)
+    for i in 1:n
+        u[i] *= m
+        u[i] += 1
+    end
+    return floor(Int, u)
 end
 
 
